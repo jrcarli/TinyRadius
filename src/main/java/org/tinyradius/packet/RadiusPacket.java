@@ -850,6 +850,13 @@ public class RadiusPacket {
 			encodeRequestAttributes(sharedSecret);
 		}
 
+		// identify the optional Message-Authenticator attribute
+		RadiusAttribute macAttribute = getAttribute(MessageAuthenticator.MESSAGE_AUTHENTICATOR_ATTRIBUTE_TYPE);
+		if (macAttribute != null) {
+			// zero out the Message-Authenticator data
+			macAttribute.setAttributeData(MessageAuthenticator.NULL_BYTES);
+		}
+
 		byte[] attributes = getAttributeBytes();
 		int packetLength = RADIUS_HEADER_LENGTH + attributes.length;
 		if (packetLength > MAX_PACKET_LENGTH)
@@ -863,6 +870,16 @@ public class RadiusPacket {
 		else {
 			// update authenticator after encoding attributes
 			authenticator = updateRequestAuthenticator(sharedSecret, packetLength, attributes);
+		}
+
+		// calculate the new Message-Authenticator attribute, if the attribute had been included by the client
+		if (macAttribute != null) {
+			try {
+				macAttribute.setAttributeData(MessageAuthenticator.calculate(this, packetLength, attributes, sharedSecret));
+				attributes = getAttributeBytes();
+			} catch(RadiusException e) {
+				throw new RuntimeException(e.getMessage());
+			}
 		}
 
 		DataOutputStream dos = new DataOutputStream(out);
